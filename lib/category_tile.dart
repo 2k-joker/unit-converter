@@ -6,7 +6,7 @@ final _borderRadius = BorderRadius.circular(_tileHeight / 2);
 
 class CategoryTile extends StatelessWidget {
   final Category category;
-  final ValueChanged<Category> onTap;
+  final ValueChanged<Category>? onTap;
 
   const CategoryTile({
     Key? key,
@@ -24,7 +24,7 @@ class CategoryTile extends StatelessWidget {
           borderRadius: _borderRadius,
           highlightColor: category.color['highlight'],
           splashColor: category.color['splash'],
-          onTap: () => onTap(category),
+          onTap: onTap == null ? null : () => onTap!(category),
           child: Padding(
             padding: const EdgeInsets.all(8.0),
             child: Row(
@@ -32,10 +32,7 @@ class CategoryTile extends StatelessWidget {
               children: [
                 Padding(
                   padding: const EdgeInsets.all(16.0),
-                  child: Icon(
-                    category.icon,
-                    size: 60.0,
-                  ),
+                  child: Image.asset(category.iconLocation),
                 ),
                 Center(
                   child: Text(

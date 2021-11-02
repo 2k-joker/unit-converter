@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:unit_converter/api_client.dart';
 import 'package:unit_converter/backdrop.dart';
 import 'package:unit_converter/category.dart';
 import 'package:unit_converter/category_tile.dart';
@@ -16,17 +19,6 @@ class _CategoryScreenState extends State<CategoryScreen> {
   Category? _defaultCategory;
   Category? _currentCategory;
   final _allCategories = <Category>[];
-
-  static const _categoryNames = <String>[
-    'Length',
-    'Area',
-    'Volume',
-    'Mass',
-    'Time',
-    'Digital Storage',
-    'Energy',
-    'Currency',
-  ];
 
   static const _baseColors = <ColorSwatch>[
     ColorSwatch(0xFF6AB7A8, {
@@ -64,23 +56,86 @@ class _CategoryScreenState extends State<CategoryScreen> {
     }),
   ];
 
-  @override
-  void initState() {
-    super.initState();
+  static const _icons = <String>[
+    'assets/icons/length.png',
+    'assets/icons/area.png',
+    'assets/icons/volume.png',
+    'assets/icons/mass.png',
+    'assets/icons/time.png',
+    'assets/icons/digital_storage.png',
+    'assets/icons/power.png',
+    'assets/icons/currency.png',
+  ];
 
-    for (var i = 0; i < _categoryNames.length; i++) {
+  @override
+  Future<void> didChangeDependencies() async {
+    super.didChangeDependencies();
+    if (_allCategories.isEmpty) {
+      await _retrieveLocalCategories();
+      await _retrieveApiCategory();
+    }
+  }
+
+  Future<void> _retrieveLocalCategories() async {
+    final json = DefaultAssetBundle.of(context)
+        .loadString('assets/data/regular_units.json');
+    final data = const JsonDecoder().convert(await json);
+
+    if (data is! Map) {
+      throw ('Data retrieved from API is not a Map');
+    }
+    var categoryIndex = 0;
+    for (var key in data.keys) {
+      final List<Unit> units =
+          data[key].map<Unit>((dynamic data) => Unit.fromJson(data)).toList();
+
       var category = Category(
-        name: _categoryNames[i],
-        color: _baseColors[i],
-        icon: Icons.cake,
-        units: _retrieveUnitList(_categoryNames[i]),
+        name: key,
+        units: units,
+        color: _baseColors[categoryIndex],
+        iconLocation: _icons[categoryIndex],
       );
 
-      if (i == 0) {
-        _defaultCategory = category;
-      }
+      setState(() {
+        if (categoryIndex == 0) {
+          _defaultCategory = category;
+        }
+        _allCategories.add(category);
+      });
 
-      _allCategories.add(category);
+      categoryIndex += 1;
+    }
+  }
+
+  Future<void> _retrieveApiCategory() async {
+    // Add a placeholder while we fetch the Currency category using the API
+    setState(() {
+      _allCategories.add(Category(
+        name: ApiClient.apiCategory['name']!,
+        units: [],
+        color: _baseColors.last,
+        iconLocation: _icons.last,
+      ));
+    });
+
+    final apiClient = ApiClient();
+    final jsonUnits = await apiClient.getUnits(ApiClient.apiCategory['route']);
+    // If the API errors out or we have no internet connection, this category
+    // remains in placeholder mode (disabled)
+    if (jsonUnits != null) {
+      final units = <Unit>[];
+      for (var unit in jsonUnits) {
+        units.add(Unit.fromJson(unit));
+      }
+      setState(() {
+        _allCategories.removeLast();
+        _allCategories.add(Category(
+          name: ApiClient.apiCategory['name']!,
+          units: units,
+          color: _baseColors.last,
+          iconLocation: _icons.last,
+        ));
+      });
     }
   }
 
@@ -90,13 +145,21 @@ class _CategoryScreenState extends State<CategoryScreen> {
     });
   }
 
+  ValueChanged<Category>? _configureCategoryTap(Category category) {
+    return category.name == ApiClient.apiCategory['name'] &&
+        category.units.isEmpty
+        ? null
+        : _onCategoryTap;
+  }
+
   Widget _buildCategoryWidgets(Orientation deviceOrientation) {
     if (deviceOrientation == Orientation.portrait) {
       return ListView.builder(
         itemBuilder: (BuildContext context, int index) {
+          var _category = _allCategories[index];
           return CategoryTile(
-            category: _allCategories[index],
-            onTap: _onCategoryTap,
+            category: _category,
+            onTap: _configureCategoryTap(_category),
           );
         },
         itemCount: _allCategories.length,
@@ -106,7 +169,10 @@ class _CategoryScreenState extends State<CategoryScreen> {
         crossAxisCount: 2,
         childAspectRatio: 3.0,
         children: _allCategories.map((Category category) {
-          return CategoryTile(category: category, onTap: _onCategoryTap,);
+          return CategoryTile(
+            category: category,
+            onTap: _configureCategoryTap(category),
+          );
         }).toList(),
       );
     }
